@@ -3,7 +3,7 @@ Final Project on Employee Turnover for Fall 2022 PSTAT 175: Group 13 (Ezra Aguim
 
 # 1. Data Set Introduction
 
-We chose to analyze the Employee Turnover dataset from the website Kaggle found (here) [https://www.kaggle.com/datasets/davinwijaya/employee-turnover]: https://www.kaggle.com/datasets/davinwijaya/employee-turnover. This Employer Turnover dataset contains 1129 observations with 17 covariates about how long it took until the employer quit the job. The covariates will be as follows:
+We chose to analyze the Employee Turnover dataset from the website Kaggle found here: https://www.kaggle.com/datasets/davinwijaya/employee-turnover. This Employer Turnover dataset contains 1129 observations with 17 covariates about how long it took until the employer quit the job. The covariates will be as follows:
 stag, event, gender, age, industry, profession, traffic, coach, head_gender, greywage, way, extraversion, independence, selfcontrol, anxiety, novator. 
 Our project will aim to predict the probability of an employee turning over or leaving versus not leaving based on the events and variables in the dataset. The outline of the covariates is as follows: 
 
