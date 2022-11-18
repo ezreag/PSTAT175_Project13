@@ -1,0 +1,65 @@
+---
+title: "NYPD_Shooting_Incident"
+output: html_document
+date: '2022-11-04'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lubridate)
+library(mlr)
+library(survival)
+library(pec)
+library(survAUC)
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+```
+
+```{r}
+turnover <- read_csv("turnover.csv")
+turnover <- turnover %>% mutate(stagSurv = Surv(stag, event),
+                                gender = as.factor(ifelse(gender == "m","Male","Female")),
+                                coach = as.factor(coach),
+                                greywage = as.factor(greywage),
+                                head_gender = as.factor(ifelse(head_gender == "m","Male","Female")),
+                                industry = as.factor(industry),
+                                profession = as.factor(profession),
+                                traffic = as.factor(traffic))
+#turnover$stag*487*12/15
+CPH.personality <- coxph(stagSurv~extraversion+independ+selfcontrol+anxiety+novator,turnover)
+stepAIC(CPH.personality)
+CPH.fit <- coxph(formula = stagSurv ~ selfcontrol + anxiety, data = turnover)
+coxph(formula = stagSurv ~ selfcontrol*anxiety, data = turnover)
+stepAIC(coxph(formula = stagSurv ~ selfcontrol*anxiety+selfcontrol+anxiety, data = turnover))
+```
+interaction between covariates are not significant to be included in the model.
+
+```{r}
+BIC(CPH.personality)
+BIC(CPH.fit)
+```
+Since CPH.fit gives smaller BIC score than CPH.personality, we can confirm it is better fit model
+
+```{r}
+```
+
+plot(survfit(turnover$stagSurv ~ 1), main = "Survival Curve of turnover time",
+     xlab="Time (Months?)", ylab="Probability of Survival",
+     font.main=4, font.lab=4, font.sub=4, col = "darkorchid3")
+
+
+Look at the result and ph assumptions
+Hazard ratio, conclusion, adjustments to the model
+Looking at the personality pieces, that hazard ratios (95% CI)
+
+Beyond that... try something like
+extrovert > 5
+0     if ext. <= 5, 
+ext-5 if ext. > 5
+
+
+
+
+
+
