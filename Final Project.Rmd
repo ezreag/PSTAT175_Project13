@@ -39,6 +39,7 @@ interaction between covariates are not significant to be included in the model.
 BIC(CPH.personality)
 BIC(CPH.fit)
 ```
+Test
 Since CPH.fit gives smaller BIC score than CPH.personality, we can confirm it is better fit model
 
 ```{r}
