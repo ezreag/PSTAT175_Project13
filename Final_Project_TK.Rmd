@@ -1,7 +1,9 @@
 ---
 title: "NYPD_Shooting_Incident"
-output: html_document
-date: '2022-11-04'
+output:
+  pdf_document: default
+  html_document: default
+date: "2022-11-04"
 ---
 
 ```{r setup, include=FALSE}
@@ -9,37 +11,107 @@ knitr::opts_chunk$set(echo = TRUE)
 library(lubridate)
 library(mlr)
 library(survival)
+library(survminer)
 library(pec)
 library(survAUC)
+library(MASS)
 library(dplyr)
 library(reshape2)
 library(ggplot2)
+library(readr)
 ```
 
 ```{r}
 turnover <- read_csv("turnover.csv")
 turnover <- turnover %>% mutate(stagSurv = Surv(stag, event),
-                                gender = as.factor(ifelse(gender == "m","Male","Female")),
+                                gender = as.factor(gender),
                                 coach = as.factor(coach),
                                 greywage = as.factor(greywage),
-                                head_gender = as.factor(ifelse(head_gender == "m","Male","Female")),
+                                head_gender = as.factor(head_gender),
                                 industry = as.factor(industry),
                                 profession = as.factor(profession),
-                                traffic = as.factor(traffic))
+                                traffic = as.factor(traffic),
+                                way = as.factor(way),
+                                ev.factor = as.factor(extraversion),
+                                id.factor = as.factor(independ),
+                                sc.factor = as.factor(selfcontrol),
+                                ax.factor = as.factor(anxiety),
+                                nv.factor = as.factor(novator))
 #turnover$stag*487*12/15
-CPH.personality <- coxph(stagSurv~extraversion+independ+selfcontrol+anxiety+novator,turnover)
-stepAIC(CPH.personality)
-CPH.fit <- coxph(formula = stagSurv ~ selfcontrol + anxiety, data = turnover)
-coxph(formula = stagSurv ~ selfcontrol*anxiety, data = turnover)
-stepAIC(coxph(formula = stagSurv ~ selfcontrol*anxiety+selfcontrol+anxiety, data = turnover))
+roygbiv <- c("red","orange","yellow","green","blue","slateblue2","violet","black")
+fourcolor <- function(total, front){
+  return(c(rep("white", front), "black", "red", "blue", "green", rep("white", total-front-4)))
+}
 ```
-interaction between covariates are not significant to be included in the model.
+Since there are no more than one event occuring per observation, we are going to look at the normal cox ph model.
+```{r}
+CPH.all <- coxph(stagSurv~gender+age+industry+traffic+coach+head_gender+greywage+way+
+                           extraversion+independ+selfcontrol+anxiety+novator,turnover)
+```
+
+Running through the stepAIC function, we get the final model of the following:
+```{r}
+CPH.AICfit <- coxph(formula = stagSurv ~ age+industry+profession+traffic+
+    greywage+way+selfcontrol+anxiety, data = turnover)
+```
+Now running through the forward stepwise AIC function, we can determine that age, industry, profession, traffic, greywage, way(method of transportation), as well as personality score of self control and anxiety creates a significant difference in the survival rate.
+
+We looked through log-log plots for quantitative covarites, and run through coxzph test for continuous covariates.
+```{r}
+plot(survfit(stagSurv ~ industry, turnover), fun = "cloglog", col = roygbiv)
+plot(survfit(stagSurv ~ profession, turnover), fun = "cloglog", col = roygbiv)
+plot(survfit(stagSurv ~ traffic, turnover), fun = "cloglog", col = roygbiv)
+plot(survfit(stagSurv ~ greywage, turnover), fun = "cloglog", col = roygbiv)
+plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", col = roygbiv)
+CZPH.fit <- cox.zph(CPH.AICfit)
+CZPH.fit
+ggcoxzph(CZPH.fit, var = "profession")
+```
+We will look at the stratification of age to 
+```{r}
+CPH.sAge.all <- coxph(stagSurv~gender+strata(age)+industry+traffic+coach+head_gender+greywage+way+
+                           extraversion+independ+selfcontrol+anxiety+novator,turnover)
+# stepAIC(CPH.strataAge)
+CPH.sAge.fit <- coxph(formula = stagSurv ~ strata(age)+industry+traffic+
+                        greywage+way+selfcontrol, data = turnover)
+CZPH.sAge <- cox.zph(CPH.sAge.fit)
+CZPH.sAge
+```
 
 ```{r}
-BIC(CPH.personality)
-BIC(CPH.fit)
+ggcoxzph(CZPH.sAge, var = c("industry","traffic"))
 ```
-Since CPH.fit gives smaller BIC score than CPH.personality, we can confirm it is better fit model
+greywage, way, and selfcontrol are not significant, so we can assume proportional hazards, but industry, traffic, and global test reject the significant test, so we will test for stratification
+
+```{r}
+CPH.strata2 <- coxph(formula = stagSurv ~ strata(age)+strata(industry)+strata(traffic)+
+                        greywage+way+selfcontrol, data = turnover)
+CZPH.strata2 <- cox.zph(CPH.strata2)
+CZPH.strata2
+ggcoxzph()
+```
+
+
+We will run through BIC as well to confirm.
+```{r}
+CPH.null <- coxph(formula = stagSurv ~ 1,
+    data = turnover)
+# step(CPH.null, scope = list(lower=CPH.null,upper=CPH.all),
+#      direction="both", criterion = "BIC", k=log(length(turnover)))
+CPH.BICfit <- coxph(formula = stagSurv ~ age+greywage+way+extraversion,
+                    data = turnover)
+```
+BIC gave a different model for us to use, but for now we wil be following through with the AIC model for now.
+
+
+
+grey wage tends to quit earlier than white wage
+bus > car > foot, not sure about the reason why
+
+"Agriculture"     "Banks"           "Building"        "Consult"         "etc"            
+"HoReCa"          "IT"              "manufacture"     "Mining"          "Pharma"         
+"PowerGeneration" "RealEstate"      "Retail"          "State"           "Telecom"        
+"transport" 
 
 ```{r}
 ```
