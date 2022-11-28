@@ -31,12 +31,7 @@ turnover <- turnover %>% mutate(stagSurv = Surv(stag, event),
                                 industry = as.factor(industry),
                                 profession = as.factor(profession),
                                 traffic = as.factor(traffic),
-                                way = as.factor(way),
-                                ev.factor = as.factor(extraversion),
-                                id.factor = as.factor(independ),
-                                sc.factor = as.factor(selfcontrol),
-                                ax.factor = as.factor(anxiety),
-                                nv.factor = as.factor(novator))
+                                way = as.factor(way))
 #turnover$stag*487*12/15
 color <- c("red","orange","yellow","green","blue","slateblue2","violet","black")
 fourcolor <- function(total, front){
@@ -76,17 +71,17 @@ plot(survfit(stagSurv ~ prof, turnover), fun = "cloglog", col = color)
 plot(survfit(stagSurv ~ traffic, turnover), fun = "cloglog", col = color)
 plot(survfit(stagSurv ~ greywage, turnover), fun = "cloglog", col = color)
 plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", col = color)
-CZPH.fit <- cox.zph(CPH.Ait)
+CZPH.fit <- cox.zph(CPH.Groupfit)
 CZPH.fit
 ```
-All the graphs gave mostly parallel lines, but the p-value for profession is tiny, so we will look at Schoenfeld residuals.
+All the graphs gave mostly parallel lines. However, the industry lines is small, so we will look ath the Schoenfeld residuals plot.
 ```{r}
-ggcoxzph(CZPH.fit, var = "profession")
+ggcoxzph(CZPH.fit, var = "ind")
 ```
+
+
 We will look at the stratification  to 
 ```{r}
-CPH.sAge.all <- coxph(stagSurv~gender+strata(age)+industry+traffic+coach+head_gender+greywage+way+
-                           extraversion+independ+selfcontrol+anxiety+novator,turnover)
 # stepAIC(CPH.strataAge)
 CPH.sAge.fit <- coxph(formula = stagSurv ~ strata(age)+industry+traffic+
                         greywage+way+selfcontrol, data = turnover)
