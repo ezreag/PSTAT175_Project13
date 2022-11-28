@@ -38,7 +38,7 @@ turnover <- turnover %>% mutate(stagSurv = Surv(stag, event),
                                 ax.factor = as.factor(anxiety),
                                 nv.factor = as.factor(novator))
 #turnover$stag*487*12/15
-roygbiv <- c("red","orange","yellow","green","blue","slateblue2","violet","black")
+color <- c("red","orange","yellow","green","blue","slateblue2","violet","black")
 fourcolor <- function(total, front){
   return(c(rep("white", front), "black", "red", "blue", "green", rep("white", total-front-4)))
 }
@@ -56,18 +56,34 @@ CPH.AICfit <- coxph(formula = stagSurv ~ age+industry+profession+traffic+
 ```
 Now running through the forward stepwise AIC function, we can determine that age, industry, profession, traffic, greywage, way(method of transportation), as well as personality score of self control and anxiety creates a significant difference in the survival rate.
 
-We looked through log-log plots for quantitative covarites, and run through coxzph test for continuous covariates.
+We looked through log-log plots for quantitative covariates that have few levels, and run through coxzph test for continuous covariates. For industry and profession, we will go reference the coxph function to group together levels into 3 groups (absolute z value less than 1.282, 1.282 to 2.576, and beyond 2.576)
 ```{r}
-plot(survfit(stagSurv ~ industry, turnover), fun = "cloglog", col = roygbiv)
-plot(survfit(stagSurv ~ profession, turnover), fun = "cloglog", col = roygbiv)
-plot(survfit(stagSurv ~ traffic, turnover), fun = "cloglog", col = roygbiv)
-plot(survfit(stagSurv ~ greywage, turnover), fun = "cloglog", col = roygbiv)
-plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", col = roygbiv)
-CZPH.fit <- cox.zph(CPH.AICfit)
+indG1 <- c("Agriculture","Banks","Building","Consult")
+indG2 <- c("etc","HoReCa","manufacture","Mining","Pharma","PowerGeneration","State","transport")
+profG1 <- c("BusinessDevelopment","Consult","etc","Finan\xf1e","HR","IT","Law","Sales","Teaching")
+profG2 <- c("Commercial","Engineer","Marketing","PR")
+turnover <- turnover %>% mutate(ind=ifelse(industry %in% indG1,"G1",
+                                           ifelse(industry %in% indG2,"G2","G3")),
+                                prof=ifelse(profession %in% profG1,"G1",
+                                           ifelse(profession %in% profG2,"G2","G3")))
+CPH.Groupfit <- coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety, data = turnover)
+```
+
+```{r}
+plot(survfit(stagSurv ~ ind, turnover), fun = "cloglog", col = color)
+plot(survfit(stagSurv ~ prof, turnover), fun = "cloglog", col = color)
+plot(survfit(stagSurv ~ traffic, turnover), fun = "cloglog", col = color)
+plot(survfit(stagSurv ~ greywage, turnover), fun = "cloglog", col = color)
+plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", col = color)
+CZPH.fit <- cox.zph(CPH.Ait)
 CZPH.fit
+```
+All the graphs gave mostly parallel lines, but the p-value for profession is tiny, so we will look at Schoenfeld residuals.
+```{r}
 ggcoxzph(CZPH.fit, var = "profession")
 ```
-We will look at the stratification of age to 
+We will look at the stratification  to 
 ```{r}
 CPH.sAge.all <- coxph(stagSurv~gender+strata(age)+industry+traffic+coach+head_gender+greywage+way+
                            extraversion+independ+selfcontrol+anxiety+novator,turnover)
