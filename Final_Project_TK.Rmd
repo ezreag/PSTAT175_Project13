@@ -76,9 +76,15 @@ CZPH.fit <- cox.zph(CPH.Groupfit)
 CZPH.fit
 ```
 All the graphs gave mostly parallel lines and cox zph test gives a global p-value of greater than 0.05.
+
+#Conclusion starts here
 ```{r}
-confint(CPH.Groupfit)
+as.matrix(round(exp(-CPH.Groupfit$coefficients),3))
+print("")
+round(exp(-confint(CPH.Groupfit)),3)
 ```
+
+#Additional Models
 
 Now we are going to make adjustments to personality scores to determine if any of the personality scores affect the time in anyway. Change the score to be 0 if less than 5, and subtract score by 5 otherwise.
 ```{r}
