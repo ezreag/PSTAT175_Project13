@@ -71,78 +71,59 @@ plot(survfit(stagSurv ~ prof, turnover), fun = "cloglog", col = color)
 plot(survfit(stagSurv ~ traffic, turnover), fun = "cloglog", col = color)
 plot(survfit(stagSurv ~ greywage, turnover), fun = "cloglog", col = color)
 plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", col = color)
+
 CZPH.fit <- cox.zph(CPH.Groupfit)
 CZPH.fit
 ```
-All the graphs gave mostly parallel lines. However, the industry lines is small, so we will look ath the Schoenfeld residuals plot.
+All the graphs gave mostly parallel lines and cox zph test gives a global p-value of greater than 0.05.
 ```{r}
-ggcoxzph(CZPH.fit, var = "ind")
+confint(CPH.Groupfit)
 ```
 
-
-We will look at the stratification  to 
+Now we are going to make adjustments to personality scores to determine if any of the personality scores affect the time in anyway. Change the score to be 0 if less than 5, and subtract score by 5 otherwise.
 ```{r}
-# stepAIC(CPH.strataAge)
-CPH.sAge.fit <- coxph(formula = stagSurv ~ strata(age)+industry+traffic+
-                        greywage+way+selfcontrol, data = turnover)
-CZPH.sAge <- cox.zph(CPH.sAge.fit)
-CZPH.sAge
+turnover <- turnover %>% mutate(ex5 = ifelse(extraversion <= 5, 0, extraversion-5),
+                                id5 = ifelse(independ <= 5, 0, independ-5),
+                                sc5 = ifelse(selfcontrol <= 5, 0, selfcontrol-5),
+                                ax5 = ifelse(anxiety <= 5, 0, anxiety-5),
+                                nv5 = ifelse(novator <= 5, 0, novator-5))
+coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety+
+      ex5+id5+nv5, data = turnover)
+stepAIC(coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety+
+      ex5+id5+nv5, data = turnover))
+CPH.cutoff5 <- coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+
+    way+selfcontrol+anxiety+ex5, data = turnover)
+cox.zph(CPH.cutoff5)
 ```
 
+We will also try the same for cutoff at 3 and 7
 ```{r}
-ggcoxzph(CZPH.sAge, var = c("industry","traffic"))
-```
-greywage, way, and selfcontrol are not significant, so we can assume proportional hazards, but industry, traffic, and global test reject the significant test, so we will test for stratification
-
-```{r}
-CPH.strata2 <- coxph(formula = stagSurv ~ strata(age)+strata(industry)+strata(traffic)+
-                        greywage+way+selfcontrol, data = turnover)
-CZPH.strata2 <- cox.zph(CPH.strata2)
-CZPH.strata2
-ggcoxzph()
-```
-
-
-We will run through BIC as well to confirm.
-```{r}
-CPH.null <- coxph(formula = stagSurv ~ 1,
-    data = turnover)
-# step(CPH.null, scope = list(lower=CPH.null,upper=CPH.all),
-#      direction="both", criterion = "BIC", k=log(length(turnover)))
-CPH.BICfit <- coxph(formula = stagSurv ~ age+greywage+way+extraversion,
-                    data = turnover)
-```
-BIC gave a different model for us to use, but for now we wil be following through with the AIC model for now.
-
-
-
-grey wage tends to quit earlier than white wage
-bus > car > foot, not sure about the reason why
-
-"Agriculture"     "Banks"           "Building"        "Consult"         "etc"            
-"HoReCa"          "IT"              "manufacture"     "Mining"          "Pharma"         
-"PowerGeneration" "RealEstate"      "Retail"          "State"           "Telecom"        
-"transport" 
-
-```{r}
+turnover <- turnover %>% mutate(ex3 = ifelse(extraversion <= 3, 0, extraversion-3),
+                                id3 = ifelse(independ <= 3, 0, independ-3),
+                                sc3 = ifelse(selfcontrol <= 3, 0, selfcontrol-3),
+                                ax3 = ifelse(anxiety <= 3, 0, anxiety-3),
+                                nv3 = ifelse(novator <= 3, 0, novator-3),
+                                ex7 = ifelse(extraversion <= 7, 0, extraversion-7),
+                                id7 = ifelse(independ <= 7, 0, independ-7),
+                                sc7 = ifelse(selfcontrol <= 7, 0, selfcontrol-7),
+                                ax7 = ifelse(anxiety <= 7, 0, anxiety-7),
+                                nv7 = ifelse(novator <= 7, 0, novator-7))
+CPH.max <-coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
+                  extraversion+independ+selfcontrol+anxiety+novator+
+                  ex3+id3+sc3+ax3+nv3+
+                  ex5+id5+sc5+ax5+nv5+
+                  ex7+id7+sc7+ax7+nv7, data = turnover)
+CPH.cutoff.fit <- stepAIC(CPH.max)
+cox.zph(CPH.cutoff.fit)
 ```
 
-plot(survfit(turnover$stagSurv ~ 1), main = "Survival Curve of turnover time",
-     xlab="Time (Months?)", ylab="Probability of Survival",
-     font.main=4, font.lab=4, font.sub=4, col = "darkorchid3")
-
-
-Look at the result and ph assumptions
-Hazard ratio, conclusion, adjustments to the model
-Looking at the personality pieces, that hazard ratios (95% CI)
-
-Beyond that... try something like
-extrovert > 5
-0     if ext. <= 5, 
-ext-5 if ext. > 5
-
-
-
+ex3,ex7,and ax7 has higher p-value than ex5 and ax5 respectively, so our final model will exclude them
+```{r}
+coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
+        ex5+ax5+sc7,data = turnover)
+```
 
 
 
