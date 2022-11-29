@@ -1,0 +1,183 @@
+---
+title: "PSTAT 175 Final Project Proposal"
+author: "Ezra Aguimatang"
+date: '2022-11-04'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, collapse = TRUE, warning = FALSE)
+```
+```{r include=FALSE}
+required_packages <- c("readr", "tinytex", "survival", "survminer", "ggplot2", "tidyr", "MASS")
+lapply(required_packages, require, character.only=TRUE)
+```
+
+# Turnover Data
+Reading in `turnover.csv` and re-factoring variables
+```{r}
+turnover <- read_csv("turnover.csv")
+turnover <- turnover %>% mutate(stagSurv = Surv(stag, event),
+                                gender = as.factor(ifelse(gender == "m","Male","Female")),
+                                coach = as.factor(coach),
+                                greywage = as.factor(greywage),
+                                head_gender = as.factor(ifelse(head_gender == "m","Male","Female")),
+                                industry = as.factor(industry),
+                                profession = as.factor(profession),
+                                traffic = as.factor(traffic))
+```
+
+# Model Fitting, AIC Step (Grace)
+```{r}
+#turnover$stag*487*12/15
+CPH.personality <- coxph(stagSurv~extraversion+independ+selfcontrol+anxiety+novator,turnover)
+stepAIC(CPH.personality)
+CPH.fit <- coxph(formula = stagSurv ~ selfcontrol + anxiety, data = turnover)
+coxph(formula = stagSurv ~ selfcontrol*anxiety, data = turnover)
+stepAIC(coxph(formula = stagSurv ~ selfcontrol*anxiety+selfcontrol+anxiety, data = turnover))
+```
+interaction between covariates are not significant to be included in the model.
+
+```{r}
+BIC(CPH.personality)
+BIC(CPH.fit)
+```
+Since CPH.fit gives smaller BIC score than CPH.personality, we can confirm it is better fit model
+
+```{r}
+plot(survfit(turnover$stagSurv ~ 1), main = "Survival Curve of turnover time",
+     xlab="Time (Months?)", ylab="Probability of Survival",
+     font.main=4, font.lab=4, font.sub=4, col = "darkorchid3")
+```
+
+Look at the result and ph assumptions
+Hazard ratio, conclusion, adjustments to the model
+Looking at the personality pieces, that hazard ratios (95% CI)
+
+Beyond that... try something like
+extrovert > 5
+0     if ext. <= 5, 
+ext-5 if ext. > 5
+
+\newpage
+
+# Checking PH Assumptions (EZRA)
+
+There are 3 main approaches we use when evaluating the proportional hazards (PH) model assumption of the Cox model:  
+  
+  1. A Graphical Procedure  
+  2. A Goodness-of-Fit Test  
+  3. A procedure using Time-Dependent Variables  
+
+```{r}
+```
+
+## Graphical Approach to Testing the PH Assumption
+
+There are two main types of graphical approaches that are used to test the PH assumption: an estimated log(-log) plot, or a comparison of the observed and predicted survivor curves. For this data set we will be testing the Proportional Hazards Assumption with the log-log plot method.
+
+\newpage
+
+### Log(-Log) Plots
+```{r}
+colorlines <- c("blue", "pink", "red", "hotpink", "maroon", "orange", "yellow", 
+                "green", "turquoise", "darkgreen", "violet", "lavender", "black", 
+                "brown", "magenta", "gold")
+
+# Gender Log(-Log) Plot
+gender.KM <- survfit(stagSurv ~ as.factor(gender), data = turnover)
+plot(gender.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Gender Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("Male", "Female"), fill=c("blue", "pink"))
+
+# Industry Log(-Log) Plot
+industry.KM <- survfit(stagSurv ~ as.factor(industry), data = turnover)
+plot(industry.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Industry Log(-Log) curves")
+
+# Profession Log(-Log) Plot
+profession.KM <- survfit(stagSurv ~ as.factor(profession), data = turnover)
+plot(profession.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Profession Log(-Log) curves")
+
+# Traffic Log(-Log) Plot
+traffic.KM <- survfit(stagSurv ~ as.factor(traffic), data = turnover)
+plot(traffic.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Traffic Log(-Log) curves")
+
+# Greywage Log(-Log) Plot
+greywage.KM <- survfit(stagSurv ~ as.factor(greywage), data = turnover)
+plot(greywage.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Greywage Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("grey", "white"), fill=c("blue", "pink"))
+
+# Way Log(-Log) Plot
+way.KM <- survfit(stagSurv ~ as.factor(way), data = turnover)
+plot(way.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Way Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("bus", "car", "foot"), fill=c("blue", "pink", "red"))
+```
+
+\newpage
+
+## Goodness-of-Fit Approach to Testing the PH Assumption
+
+With this approach we utilize a test statistic and p-value in order to assess the validity of the PH assumption for any given predictor. This is a more concrete and accurate method to test this assumption in comparison to the graphical approach. For this study we will use the `cox.zph()` function to give us the p-values of the Global and Individual Shoenfeld Tests, which we will also represent with a plot using the `ggcoxzph()` function.
+
+```{r}
+# Cox PH Model: Gender
+coxph.gender <- coxph(stagSurv~gender, data=turnover)
+summary(coxph.gender)
+anova(coxph.gender)
+testzph.gender <- cox.zph(coxph.gender)
+ggcoxzph(testzph.gender)
+
+# Cox PH Model: Industry
+coxph.industry <- coxph(stagSurv~industry, data=turnover)
+summary(coxph.industry)
+anova(coxph.industry)
+testzph.industry <- cox.zph(coxph.industry)
+ggcoxzph(testzph.industry)
+
+# Cox PH Model: Profession
+coxph.profession <- coxph(stagSurv~profession, data=turnover)
+summary(coxph.profession)
+anova(coxph.profession)
+testzph.profession <- cox.zph(coxph.profession)
+ggcoxzph(testzph.profession)
+
+# Cox PH Model: Traffic
+coxph.traffic <- coxph(stagSurv~traffic, data=turnover)
+summary(coxph.traffic)
+anova(coxph.traffic)
+testzph.traffic <- cox.zph(coxph.traffic)
+ggcoxzph(testzph.traffic)
+
+# Cox PH Model: Grey Wage
+coxph.greywage <- coxph(stagSurv~greywage, data=turnover)
+summary(coxph.greywage)
+anova(coxph.greywage)
+testzph.greywage <- cox.zph(coxph.greywage)
+ggcoxzph(testzph.greywage)
+
+# Cox PH Model: Way
+coxph.way <- coxph(stagSurv~way, data=turnover)
+summary(coxph.way)
+anova(coxph.way)
+testzph.way <- cox.zph(coxph.way)
+ggcoxzph(testzph.way)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
