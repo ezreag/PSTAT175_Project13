@@ -27,23 +27,282 @@ library(lubridate)
 We chose to analyze the Employee Turnover dataset *insert footnote*. This Employer Turnover dataset contains 1129 observations with 17 covariates about how long it took until the employer quit the job. We are using the column stag as our time variable, which represents failure and censor time in units months *verified*. In the event column, 1 is for an employee quitting, 0 is for a censor. 
 
 
-The covariates in our model include the character variables: gender, age, industry, profession, traffic, coach, head_gender, greywage, and way. Additional covariates include float variables ranging from 1-10: extraversion, independence, selfcontrol, anxiety, novator. 
+The covariates in our model include the character variables: gender, age, industry, profession, traffic, coach, head_gender, greywage, and way. Additional covariates include float variables ranging from 1-10: extraversion, independence, selfcontrol, anxiety, novator. *change variables potentially?, see:* "The features self-control, anxiety, independ, and novator were renamed conscientiousness, neuroticism, agreeableness and openness to experience, based on the Big Five Personality Model." (L.J.C.H. Hamers, 2021) 
 
 
 Our project will aim to predict the probability of an employee turning over or leaving versus not leaving based on the events and variables in the dataset. *One key question asked by the study.* In reference to the dataset, "the goal is to predict individual risks of quitting of specific applicants." (E. Babushkin, 2017). *Add citation to information.* 
 
 
-*Questions asked in analysis* influence of personality traits and other covariates on turnover. *"You should include some plots to draw a picture of the most relevant comparison in your data set."*:  
+*Questions asked in analysis:* influence of personality traits and other covariates on turnover. (relevant plots, will include later)
+
+```{r}
+# code chunk, insert plots here 
+```
+
+*Explanatory summary of final model*: 
+
 
 
 "To answer the posed research questions, this study made use of the Employee Turnover
 dataset which contains information on personality traits, demographics, industry, and coaching. It is a real dataset shared by E. Babushkin (2017), validated by research of Baginska (2018). Edward Babushkin, an HR analyst from Moscow, performed himself survival analysis to predict the risk of particular employees’ quitting (Babushkin, 2017). The data stems from a call-center company with various branches across Russia. Turnover is a key issue within this industry." (L.J.C.H. Hamers, 2021) 
 
-"The features self-control, anxiety, independ, and novator were renamed conscientiousness, neuroticism, agreeableness and openness to experience, based on the Big Five Personality Model." (L.J.C.H. Hamers, 2021) 
+http://arno.uvt.nl/show.cgi?fid=157305 
 
-In reference to the dataset, "the goal is to predict individual risks of quitting of specific applicants." (E. Babushkin, 2017)
 
-see page 23: http://arno.uvt.nl/show.cgi?fid=157305 
+```{r, echo=FALSE}
+turnover <- read_csv("turnover.csv")
+turnover <- turnover %>% mutate(stagSurv = Surv(stag, event),
+                                # difference in change of factoring?
+                                gender = as.factor(ifelse(gender=="m","Male","Female")),
+                                coach = as.factor(coach),
+                                greywage = as.factor(greywage),
+                                as.factor(ifelse(head_gender == "m","Male","Female")),
+                                industry = as.factor(industry),
+                                profession = as.factor(profession),
+                                traffic = as.factor(traffic),
+                                way = as.factor(way))
+#turnover$stag*487*12/15
+# changed yellow to green because hard to see in plot
+roygbiv <- c("red","orange","green","cyan","blue","slateblue2","violet","black")
+fourcolor <- function(total, front){
+  return(c(rep("white", front), "black", "red", "blue", "green", rep("white", total-front-4)))}
+```
+
+# Forward AIC and BIC Models
+
+Since there are no more than one event occurring per observation, we are going to look at the normal cox ph model.
+```{r}
+CPH.all <- coxph(stagSurv~gender+age+industry+traffic+coach+head_gender+greywage+way+
+                           extraversion+independ+selfcontrol+anxiety+novator,turnover)
+# CPH.all
+``` 
+(gender refactor?) Looking at the p-values, we remove the least relevant observations because of on their large p-values. 
+
+Running through the stepAIC function, we get the final model of the following:
+```{r}
+CPH.AICfit <- coxph(formula = stagSurv ~ age+industry+profession+traffic+
+    greywage+way+selfcontrol+anxiety, data = turnover)
+```
+Now running through the forward stepwise AIC function, we can determine that age, industry, profession, traffic, greywage, way(method of transportation), as well as personality score of self control and anxiety creates a significant difference in the survival rate.
+
+
+# Proportional Hazards Assumptions (Tetsuto's Version)
+
+We looked through log-log plots for quantitative covariates that have few levels, and run through coxzph test for continuous covariates. For industry and profession, we will go reference the coxph function to group together levels into 3 groups (absolute z value less than 1.282, 1.282 to 2.576, and beyond 2.576)
+```{r}
+indG1 <- c("Agriculture","Banks","Building","Consult")
+indG2 <- c("etc","HoReCa","manufacture","Mining","Pharma","PowerGeneration","State","transport")
+profG1 <- c("BusinessDevelopment","Consult","etc","Finan\xf1e","HR","IT","Law","Sales","Teaching")
+profG2 <- c("Commercial","Engineer","Marketing","PR")
+turnover <- turnover %>% mutate(ind=ifelse(industry %in% indG1,"G1",
+                                           ifelse(industry %in% indG2,"G2","G3")),
+                                prof=ifelse(profession %in% profG1,"G1",
+                                           ifelse(profession %in% profG2,"G2","G3")))
+CPH.Groupfit <- coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety, data = turnover)
+```
+
+
+We looked through log-log plots for quantitative covarites, and run through coxzph test for continuous covariates.
+```{r}
+par(mfrow=c(2,3))
+# Tetsuto's version 
+
+# ggsurvplot(survfit(stagSurv ~ gender, turnover), fun = "cloglog", censor.size=0.4, size = 0.4, xlab="Time in Months", title="Stratified Gender") # , col = roygbiv) # include gender? refactoring influence?
+
+# might not include Gender if not statistically significant
+plot(survfit(stagSurv ~ ind, turnover), fun="cloglog", xlab="Time in Months", main="Stratified Gender", col = roygbiv)
+plot(survfit(stagSurv ~ ind, turnover), fun="cloglog", xlab="Time in Months", main="Stratified Industry", col = roygbiv)
+plot(survfit(stagSurv ~ prof, turnover), fun="cloglog", xlab="Time in Months", main="Stratified Profession", col = roygbiv)
+plot(survfit(stagSurv ~ traffic, turnover), fun="cloglog", xlab="Time in Months", main="Stratified Traffic", col = roygbiv)
+plot(survfit(stagSurv ~ greywage, turnover), fun = "cloglog", xlab="Time in Months", main="Stratified Greywage", col = roygbiv)
+plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", xlab="Time in Months", main="Stratified Way", col = roygbiv)
+
+CZPH.fit <- cox.zph(CPH.Groupfit)
+CZPH.fit
+```
+All the graphs gave mostly parallel lines and cox zph test gives a global p-value of greater than 0.05.
+
+# Proportional Hazards Assumptions (Ezra's Version)
+```{r}
+par(mfrow=c(2,3))
+colorlines <- c("blue", "pink", "red", "hotpink", "maroon", "orange", "yellow", 
+                "green", "turquoise", "darkgreen", "violet", "lavender", "black", 
+                "brown", "magenta", "gold")
+# Gender Log(-Log) Plot
+gender.KM <- survfit(stagSurv ~ as.factor(gender), data = turnover)
+plot(gender.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Gender Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("Male", "Female"), fill=c("blue", "pink"))
+# Industry Log(-Log) Plot
+industry.KM <- survfit(stagSurv ~ as.factor(industry), data = turnover)
+plot(industry.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Industry Log(-Log) curves")
+# Profession Log(-Log) Plot
+profession.KM <- survfit(stagSurv ~ as.factor(profession), data = turnover)
+plot(profession.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Profession Log(-Log) curves")
+# Traffic Log(-Log) Plot
+traffic.KM <- survfit(stagSurv ~ as.factor(traffic), data = turnover)
+plot(traffic.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Traffic Log(-Log) curves")
+# Greywage Log(-Log) Plot
+greywage.KM <- survfit(stagSurv ~ as.factor(greywage), data = turnover)
+plot(greywage.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Greywage Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("grey", "white"), fill=c("blue", "pink"))
+# Way Log(-Log) Plot
+way.KM <- survfit(stagSurv ~ as.factor(way), data = turnover)
+plot(way.KM, fun = "cloglog", col = colorlines, xlab = "time",
+     ylab = "Log(-Log) survival", main = "Way Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("bus", "car", "foot"), fill=c("blue", "pink", "red"))
+```
+
+\newpage
+
+## Goodness-of-Fit Approach to Testing the PH Assumption
+
+With this approach we utilize a test statistic and p-value in order to assess the validity of the PH assumption for any given predictor. This is a more concrete and accurate method to test this assumption in comparison to the graphical approach. For this study we will use the `cox.zph()` function to give us the p-values of the Global and Individual Shoenfeld Tests, which we will also represent with a plot using the `ggcoxzph()` function.
+
+
+```{r, echo=FALSE}
+# Cox PH Model: Gender
+coxph.gender <- coxph(stagSurv~gender, data=turnover)
+summary(coxph.gender)$coefficients
+# anova(coxph.gender)
+testzph.gender <- cox.zph(coxph.gender)
+ggcoxzph(testzph.gender)
+# Cox PH Model: Industry
+coxph.industry <- coxph(stagSurv~industry, data=turnover)
+summary(coxph.industry)$coefficients
+# anova(coxph.industry)
+testzph.industry <- cox.zph(coxph.industry)
+ggcoxzph(testzph.industry)$coefficients
+# Cox PH Model: Profession
+coxph.profession <- coxph(stagSurv~profession, data=turnover)
+summary(coxph.profession)$coefficients
+# anova(coxph.profession)
+testzph.profession <- cox.zph(coxph.profession)
+ggcoxzph(testzph.profession)$coefficients[]
+# Cox PH Model: Traffic
+coxph.traffic <- coxph(stagSurv~traffic, data=turnover)
+summary(coxph.traffic)$coefficients
+# anova(coxph.traffic)
+testzph.traffic <- cox.zph(coxph.traffic)
+ggcoxzph(testzph.traffic)
+# Cox PH Model: Grey Wage
+coxph.greywage <- coxph(stagSurv~greywage, data=turnover)
+summary(coxph.greywage)$coefficients
+# anova(coxph.greywage)
+testzph.greywage <- cox.zph(coxph.greywage)
+ggcoxzph(testzph.greywage)
+# Cox PH Model: Way
+coxph.way <- coxph(stagSurv~way, data=turnover)
+summary(coxph.way)$coefficients
+# anova(coxph.way)
+testzph.way <- cox.zph(coxph.way)
+ggcoxzph(testzph.way)
+```
+
+
+*will probably need help with interpretation and tying into conclusion section* 
+
+## 4 Conclusions
+• Hazard Ratios
+• 95% confidence intervals for these hazard ratios
+
+*from template*: "In your introduction, you should have set a scientific question that you are answering. You need to report your conclusion to that question. This will often be something along the lines of “the chemotherapy treatment showed a statistically significant decrease in the hazard rate for the time until re-infection.” I also want for you to report the hazard ratio for the relevant factors to your research question. In addition, I want 95% confidence intervals for these hazard ratios. These parameter values and intervals can be read directly from the summary of the coxph model, but I want to see these numbers pulled out into the narrative of the report." 
+
+https://stats.stackexchange.com/questions/379469/how-to-interpret-hazard-ratios-of-cox-output
+
+### Conclusion starts here
+
+```{r, echo=FALSE}
+summary(CPH.Groupfit)
+```
+
+```{r}
+# remove exp(coef)
+summary(CPH.Groupfit)$conf.int[,-1]
+```
+*relevancy of liklihood ratio test??*  
+
+```{r}
+# adjusted GroupFit (looking at the p-values)
+CPH.Groupfit <- coxph(formula = stagSurv ~ gender+age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety, data = turnover)
+```
+
+# Additional Models
+
+Now we are going to make adjustments to personality scores to determine if any of the personality scores affect the time in anyway. Change the score to be 0 if less than 5, and subtract score by 5 otherwise.*reasoning for not including all personality metrics?*
+
+do we want to follow procedures like in lecture or attempt exponential model effect
+```{r, include=FALSE}
+turnover <- turnover %>% mutate(ex5 = ifelse(extraversion <= 5, 0, extraversion-5),
+                                id5 = ifelse(independ <= 5, 0, independ-5),
+                                sc5 = ifelse(selfcontrol <= 5, 0, selfcontrol-5),
+                                ax5 = ifelse(anxiety <= 5, 0, anxiety-5),
+                                nv5 = ifelse(novator <= 5, 0, novator-5))
+CPH.max<-coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety+
+      ex5+id5+sc5+ax5+nv5, data = turnover)
+summary(CPH.max)$coefficients[18:22,]
+```
+
+```{r, incluude=FALSE}
+# reasoning for removing sc5 and ax5f from model? 
+# summary(coxph(formula = stagSurv ~ age+ind+prof+traffic+
+#     greywage+way+selfcontrol+anxiety+
+#       ex5+id5+nv5, data = turnover))$coefficients
+stepAIC(coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety+
+      ex5+id5+nv5, data = turnover))
+CPH.cutoff5 <- coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+
+    way+selfcontrol+anxiety+ex5, data = turnover)
+cox.zph(CPH.cutoff5)
+```
+
+
+We will also try the same for cutoff at 3 and 7
+```{r}
+turnover <- turnover %>% mutate(ex3 = ifelse(extraversion <= 3, 0, extraversion-3),
+                                id3 = ifelse(independ <= 3, 0, independ-3),
+                                sc3 = ifelse(selfcontrol <= 3, 0, selfcontrol-3),
+                                ax3 = ifelse(anxiety <= 3, 0, anxiety-3),
+                                nv3 = ifelse(novator <= 3, 0, novator-3),
+                                ex7 = ifelse(extraversion <= 7, 0, extraversion-7),
+                                id7 = ifelse(independ <= 7, 0, independ-7),
+                                sc7 = ifelse(selfcontrol <= 7, 0, selfcontrol-7),
+                                ax7 = ifelse(anxiety <= 7, 0, anxiety-7),
+                                nv7 = ifelse(novator <= 7, 0, novator-7))
+CPH.max <-coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
+                  extraversion+independ+selfcontrol+anxiety+novator+
+                  ex3+id3+sc3+ax3+nv3+
+                  ex5+id5+sc5+ax5+nv5+
+                  ex7+id7+sc7+ax7+nv7, data = turnover)
+# CPH.cutoff.fit <- stepAIC(CPH.max)
+# cox.zph(CPH.cutoff.fit)
+```
+
+
+```{r}
+CPH.max <-coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety+
+      ex3 + id3 + sc3 + ax3 + nv3, data = turnover)
+# CPH.cutoff.fit <- stepAIC(CPH.max)
+# cox.zph(CPH.cutoff.fit)
+
+CPH.cutoff5 <- coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+selfcontrol+anxiety+ex5, data = turnover)
+# cox.zph(CPH.cutoff5)
+```
+
+
+ex3,ex7,and ax7 has higher p-value than ex5 and ax5 respectively, so our final model will exclude them
+```{r}
+coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+ex5+ax5+sc7,data = turnover)
+```
+
 
 ### 1.1 Citations
 
@@ -52,219 +311,8 @@ Retrieved from https://edwvb.blogspot.com/2017/10/employee-turnover-how-to-predi
 
 Hamers, L.J.C.H. (2021). Retrieved from: http://arno.uvt.nl/show.cgi?fid=157305 
 
-```{r, echo=FALSE}
-turnover <- read_csv("turnover.csv")
-turnover <- turnover %>% mutate(stagSurv = Surv(stag, event),
-                                gender = as.factor(gender), # factoring? 
-                                coach = as.factor(coach),
-                                greywage = as.factor(greywage),
-                                head_gender = as.factor(head_gender),
-                                industry = as.factor(industry),
-                                profession = as.factor(profession),
-                                traffic = as.factor(traffic),
-                                way = as.factor(way),
-                                ev.factor = as.factor(extraversion),
-                                id.factor = as.factor(independ),
-                                sc.factor = as.factor(selfcontrol),
-                                ax.factor = as.factor(anxiety),
-                                nv.factor = as.factor(novator))
-#turnover$stag*487*12/15
-roygbiv <- c("red","orange","yellow","green","blue","slateblue2","violet","black")
-fourcolor <- function(total, front){
-  return(c(rep("white", front), "black", "red", "blue", "green", rep("white", total-front-4)))}
+Kleinbaum, David G., and Mitchel Klein. 2012. Survival Analysis, a Self-Learning Text. New York: Springer.
 
-# factorizing personality float scores????
-# aren't necessarily categorical so convert to int? 
-# organize by 0.5s option? 
-# we can compare factored personality scores in later analysis, use floats as is for now
-```
-
-
-# AIC/BIC Models 
-
-### Comparing Personality Scores (Old Version)
-```{r}
-#turnover$stag*487*12/15
-CPH.personality <- coxph(stagSurv~extraversion+independ+selfcontrol+anxiety+novator,turnover)
-stepAIC(CPH.personality)
-CPH.fit <- coxph(formula = stagSurv ~ selfcontrol + anxiety, data = turnover)
-coxph(formula = stagSurv ~ selfcontrol*anxiety, data = turnover)
-stepAIC(coxph(formula = stagSurv ~ selfcontrol*anxiety + selfcontrol + anxiety, data = turnover))
-```
-interaction between covariates are not significant enough to be included in the model.
-
-```{r}
-BIC(CPH.personality)
-BIC(CPH.fit)
-```
-Since CPH.fit gives smaller BIC score than CPH.personality, we can confirm it is better fit model
-
-```{r, include=FALSE}
-plot(survfit(turnover$stagSurv ~ 1), main = "Survival Curve of turnover time",
-     xlab="Time (Months?)", ylab="Probability of Survival",
-     font.main=4, font.lab=4, font.sub=4, col = "darkorchid3")
-```
-
-
-### Comparing Personality Scores (New Version)
-
-Since there are no more than one event occuring per observation, we are going to look at the normal cox ph model.
-```{r}
-CPH.all <- coxph(stagSurv~gender+age+industry+traffic+coach+head_gender+greywage+way+
-                           extraversion+independ+selfcontrol+anxiety+novator,turnover)
-# summary(CPH.all)
-```
-
-Reiterate reason for removal. Suggest indexing p-values. Also suggest refactoring male female unless there's reasoning behind it. *potential points/notes to include*: "The first oddity regards to the balance of the gender variable. 75.6% of the respondents are female." (Hamers, 2021)
-
-
-Running through the stepAIC function, we get the final model of the following:
-```{r}
-CPH.AICfit <- coxph(formula = stagSurv ~ age+industry+profession+traffic+
-    greywage+way+selfcontrol+anxiety, data = turnover)
-# summary(CPH.AICfit)
-# stepAIC(CPH.AICfit, data = turnover)
-```
-Now running through the forward stepwise AIC function, we can determine that age, industry, profession, traffic, greywage, way(method of transportation), as well as personality score of self control and anxiety creates a significant difference in the survival rate.
-
-
-We looked through log-log plots for quantitative covarites, and run through coxzph test for continuous covariates.
-```{r}
-plot(survfit(stagSurv ~ gender, turnover), fun = "cloglog", col = roygbiv) # include gender? refactoring influence?
-plot(survfit(stagSurv ~ industry, turnover), fun = "cloglog", col = roygbiv)
-plot(survfit(stagSurv ~ profession, turnover), fun = "cloglog", col = roygbiv)
-plot(survfit(stagSurv ~ traffic, turnover), fun = "cloglog", col = roygbiv)
-plot(survfit(stagSurv ~ greywage, turnover), fun = "cloglog", col = roygbiv)
-plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", col = roygbiv)
-CZPH.fit <- cox.zph(CPH.AICfit)
-CZPH.fit
-ggcoxzph(CZPH.fit, var = "profession")
-```
-
-
-We will look at the stratification of age to 
-```{r}
-CPH.sAge.all <- coxph(stagSurv~gender+strata(age)+industry+traffic+coach+head_gender+greywage+way+extraversion+independ+selfcontrol+anxiety+novator,turnover)
-# stepAIC(CPH.strataAge)
-CPH.sAge.fit <- coxph(formula = stagSurv ~ strata(age)+industry+traffic+
-                        greywage+way+selfcontrol, data = turnover)
-CZPH.sAge <- cox.zph(CPH.sAge.fit)
-CZPH.sAge
-```
-
-
-```{r}
-ggcoxzph(CZPH.sAge, var = c("industry","traffic"))
-```
-greywage, way, and self control are not significant, so we can assume proportional hazards, but industry, traffic, and global test reject the significant test, so we will test for stratification
-
-
-```{r}
-CPH.strata2 <- coxph(formula = stagSurv ~ strata(age)+strata(industry)+strata(traffic)+
-                        greywage+way+selfcontrol, data = turnover)
-CZPH.strata2 <- cox.zph(CPH.strata2)
-CZPH.strata2
-# ggcoxzph(CZPH.strata2, data=turnover)
-```
-
-
-We will run through BIC as well to confirm.
-```{r}
-CPH.null <- coxph(formula = stagSurv ~ 1,
-    data = turnover)
-# step(CPH.null, scope = list(lower=CPH.null,upper=CPH.all),
-#      direction="both", criterion = "BIC", k=log(length(turnover)))
-CPH.BICfit <- coxph(formula = stagSurv ~ age+greywage+way+extraversion,
-                    data = turnover)
-```
-BIC gave a different model for us to use, but for now we will be following through with the AIC model for now.
-
-
-
-grey wage tends to quit earlier than white wage
-bus > car > foot, not sure about the reason why
-
-"Agriculture"     "Banks"           "Building"        "Consult"         "etc"            
-"HoReCa"          "IT"              "manufacture"     "Mining"          "Pharma"         
-"PowerGeneration" "RealEstate"      "Retail"          "State"           "Telecom"        
-"transport" 
-
-
-
-## 4 Conclusions
-• Hazard Ratios
-• 95% confidence intervals for these hazard ratios
-
-In your introduction, you should have set a scientific question that you are answering. You need to report your conclusion to that question. This will often be something along the lines of “the chemotherapy treatment showed a statistically significant decrease in the hazard rate for the time until re-infection.” I also want for you to report the hazard ratio for the relevant factors to your research question. In addition, I want 95% confidence intervals for these hazard ratios. These parameter values and intervals can be read directly from the summary of the coxph model, but I want to see these numbers pulled out into the narrative of the report.
-
-```{r}
-### 95% C.I.
-# hazard ratio and 
-model <- coxph(formula = Surv(stag, event) ~ age+industry+profession+traffic+ greywage+way+selfcontrol+anxiety, data = turnover)
-# summary(model)
-exp( - confint(model)[2,])
-# model
-# index out factors with smallest p-values
-# covariate wise comparison necessary? (e.g. industry, profession, traffic)
-# change indexing 
-```
-```{r}
-# comparing personality scores 
-summary(coxph(Surv(stag, event)~anxiety, data=turnover))
-summary(coxph(Surv(stag, event)~selfcontrol, data=turnover))
-summary(coxph(Surv(stag, event)~anxiety + selfcontrol, data=turnover))
-```
-
-
-cox model, stratification, non-linear coefficient estimates.
-
-Splitting data according to personality scores 
-See 7B TimeSplit Data
-
-
-Look at the result and ph assumptions
-Hazard ratio, conclusion, adjustments to the model
-Looking at the personality pieces, that hazard ratios (95% CI)
-
-http://paper.ijcsns.org/07_book/201712/20171212.pdf 
-
-index factor look up in R 
-```{r}
-# rereading to get numerical float values 
-turnover <- read_csv("turnover.csv")
-# turnover$anxiety
-
-# anxiety > 5 
-a1 <- subset(turnover, anxiety > 5)
-# coxph(Surv(event=turnover$event[as.integer(turnover$anxiety) > 5.0], time=turnover$stag[as.integer(turnover$anxiety) > 5.0]) ~ 1, data=turnover)
-coxph(Surv(event=a1$event, time=a1$stag) ~ 1, data=a1)
-coxph(Surv(event=a1$event, time=a1$stag) ~ anxiety, data=a1)
-
-# anxiety <= 5 
-# coxph(Surv(event=turnover$event[as.integer(turnover$anxiety) > 5.0], time=turnover$stag[as.integer(turnover$anxiety) > 5.0]) ~ 1, data=turnover)
-a2 <- subset(turnover, anxiety <= 5)
-coxph(Surv(event=a2$event, time=a2$stag) ~ 1, data=a2)
-coxph(Surv(event=a2$event, time=a2$stag) ~ anxiety, data=a2)
-
-# selfControl1 <- turnover$stag[turnover$selfcontrol > 5]
-# selfControl1 <- turnover$stag[turnover$anxiety <= 5]
-
-sc1 <- subset(turnover, selfcontrol > 5)
-# coxph(Surv(event=turnover$event[as.integer(turnover$anxiety) > 5.0], time=turnover$stag[as.integer(turnover$anxiety) > 5.0]) ~ 1, data=turnover)
-# coxph(Surv(event=sc1$event, time=sc1$stag) ~ 1, data=sc1)
-coxph(Surv(event=sc1$event, time=sc1$stag) ~ selfcontrol, data=sc1)
-
-# anxiety <= 5 
-# coxph(Surv(event=turnover$event[as.integer(turnover$anxiety) > 5.0], time=turnover$stag[as.integer(turnover$anxiety) > 5.0]) ~ 1, data=turnover)
-sc2 <- subset(turnover, selfcontrol <= 5)
-# coxph(Surv(event=a2$event, time=a2$stag) ~ 1, data=sc2)
-coxph(Surv(event=sc2$event, time=sc2$stag) ~ selfcontrol, data=sc2)
-```
-
-
-Exponential model effect of personality traits  
-Beyond that... try something like *(self-control, anxiety)*
-extrovert > 5
-0     if ext. <= 5, 
-ext-5 if ext. > 5
+Potential References??:
+https://stats.stackexchange.com/questions/379469/how-to-interpret-hazard-ratios-of-cox-output, https://stats.stackexchange.com/questions/560975/how-to-interpret-schoenfield-residual-plot 
 
