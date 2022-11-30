@@ -128,7 +128,8 @@ cox.zph(CPH.cutoff.fit)
 ex3,ex7,and ax7 has higher p-value than ex5 and ax5 respectively, so our final model will exclude them
 ```{r}
 coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
-        ex5+ax5+sc7,data = turnover)
+        ex3+ex5+ax5+ex7+sc7+ax7,data = turnover)
+coxph(formula = stagSurv ~ extraversion+selfcontrol+anxiety+ex5+ax5+sc7, data = turnover)
 ```
 
 
