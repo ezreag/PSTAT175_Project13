@@ -33,7 +33,7 @@ turnover <- turnover %>% mutate(stagSurv = Surv(stag, event),
                                 traffic = as.factor(traffic),
                                 way = as.factor(way))
 #turnover$stag*487*12/15
-color <- c("red","orange","yellow","green","blue","slateblue2","violet","black")
+color <- c("red","orange","lightgreen","green","blue","slateblue2","violet","black")
 fourcolor <- function(total, front){
   return(c(rep("white", front), "black", "red", "blue", "green", rep("white", total-front-4)))
 }
@@ -63,14 +63,16 @@ turnover <- turnover %>% mutate(ind=ifelse(industry %in% indG1,"G1",
                                            ifelse(profession %in% profG2,"G2","G3")))
 CPH.Groupfit <- coxph(formula = stagSurv ~ age+ind+prof+traffic+
     greywage+way+selfcontrol+anxiety, data = turnover)
+ggcoxzph(cox.zph(coxph(stagSurv~profession)))
 ```
 
 ```{r}
-plot(survfit(stagSurv ~ ind, turnover), fun = "cloglog", col = color)
-plot(survfit(stagSurv ~ prof, turnover), fun = "cloglog", col = color)
-plot(survfit(stagSurv ~ traffic, turnover), fun = "cloglog", col = color)
-plot(survfit(stagSurv ~ greywage, turnover), fun = "cloglog", col = color)
-plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", col = color)
+par(mfrow=c(2,3))
+plot(survfit(stagSurv ~ ind, turnover), fun="cloglog", xlab="Time in Months", main="Stratified Industry", col = color)
+plot(survfit(stagSurv ~ prof, turnover), fun="cloglog", xlab="Time in Months", main="Stratified Profession", col = color)
+plot(survfit(stagSurv ~ traffic, turnover), fun="cloglog", xlab="Time in Months", main="Stratified Traffic", col = color)
+plot(survfit(stagSurv ~ greywage, turnover), fun = "cloglog", xlab="Time in Months", main="Stratified Greywage", col = color)
+plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", xlab="Time in Months", main="Stratified Way", col = color)
 
 CZPH.fit <- cox.zph(CPH.Groupfit)
 CZPH.fit
@@ -88,11 +90,21 @@ round(exp(-confint(CPH.Groupfit)),3)
 
 Now we are going to make adjustments to personality scores to determine if any of the personality scores affect the time in anyway. Change the score to be 0 if less than 5, and subtract score by 5 otherwise.
 ```{r}
-turnover <- turnover %>% mutate(ex5 = ifelse(extraversion <= 5, 0, extraversion-5),
+turnover <- turnover %>% mutate(ex3 = ifelse(extraversion <= 3, 0, extraversion-3),
+                                id3 = ifelse(independ <= 3, 0, independ-3),
+                                sc3 = ifelse(selfcontrol <= 3, 0, selfcontrol-3),
+                                ax3 = ifelse(anxiety <= 3, 0, anxiety-3),
+                                nv3 = ifelse(novator <= 3, 0, novator-3),
+                                ex5 = ifelse(extraversion <= 5, 0, extraversion-5),
                                 id5 = ifelse(independ <= 5, 0, independ-5),
                                 sc5 = ifelse(selfcontrol <= 5, 0, selfcontrol-5),
                                 ax5 = ifelse(anxiety <= 5, 0, anxiety-5),
-                                nv5 = ifelse(novator <= 5, 0, novator-5))
+                                nv5 = ifelse(novator <= 5, 0, novator-5),
+                                ex7 = ifelse(extraversion <= 7, 0, extraversion-7),
+                                id7 = ifelse(independ <= 7, 0, independ-7),
+                                sc7 = ifelse(selfcontrol <= 7, 0, selfcontrol-7),
+                                ax7 = ifelse(anxiety <= 7, 0, anxiety-7),
+                                nv7 = ifelse(novator <= 7, 0, novator-7))
 coxph(formula = stagSurv ~ age+ind+prof+traffic+
     greywage+way+selfcontrol+anxiety+
       ex5+id5+nv5, data = turnover)
@@ -106,35 +118,29 @@ cox.zph(CPH.cutoff5)
 
 We will also try the same for cutoff at 3 and 7
 ```{r}
-turnover <- turnover %>% mutate(ex3 = ifelse(extraversion <= 3, 0, extraversion-3),
-                                id3 = ifelse(independ <= 3, 0, independ-3),
-                                sc3 = ifelse(selfcontrol <= 3, 0, selfcontrol-3),
-                                ax3 = ifelse(anxiety <= 3, 0, anxiety-3),
-                                nv3 = ifelse(novator <= 3, 0, novator-3),
-                                ex7 = ifelse(extraversion <= 7, 0, extraversion-7),
-                                id7 = ifelse(independ <= 7, 0, independ-7),
-                                sc7 = ifelse(selfcontrol <= 7, 0, selfcontrol-7),
-                                ax7 = ifelse(anxiety <= 7, 0, anxiety-7),
-                                nv7 = ifelse(novator <= 7, 0, novator-7))
+turnover <- turnover %>% mutate()
 CPH.max <-coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
                   extraversion+independ+selfcontrol+anxiety+novator+
                   ex3+id3+sc3+ax3+nv3+
                   ex5+id5+sc5+ax5+nv5+
                   ex7+id7+sc7+ax7+nv7, data = turnover)
-CPH.3 <-coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
-                  extraversion+independ+selfcontrol+anxiety+novator+
+CPH.cutoff.fit <- stepAIC(CPH.max)
+stepAIC(coxph(formula = stagSurv ~ selfcontrol*anxiety, data = turnover))
+stepAIC(coxph(formula = stagSurv ~ selfcontrol*anxiety + selfcontrol + anxiety, data = turnover))
+```
+
+```{r}
+CPH.3 <- coxph(formula = stagSurv ~ gender+age+industry+traffic+coach+head_gender+greywage+way+
                   ex3+id3+sc3+ax3+nv3, data = turnover)
-CPH.5 <-coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
-                  extraversion+independ+selfcontrol+anxiety+novator+
+CPH.5 <- coxph(formula = stagSurv ~ gender+age+industry+traffic+coach+head_gender+greywage+way+
                   ex5+id5+sc5+ax5+nv5, data = turnover)
-CPH.7 <-coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
-                  extraversion+independ+selfcontrol+anxiety+novator+
+CPH.7 <- coxph(formula = stagSurv ~ gender+age+industry+traffic+coach+head_gender+greywage+way+
                   ex7+id7+sc7+ax7+nv7, data = turnover)
 CPH.cutoff3 <- stepAIC(CPH.3)
 CPH.cutoff5 <- stepAIC(CPH.5)
 CPH.cutoff7 <- stepAIC(CPH.7)
-CPH.cutoff.fit <- stepAIC(CPH.max)
 cox.zph(CPH.cutoff.fit)
+summary(coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+ex5+ax5+sc7,data = turnover))$conf.int[16:18,]
 ```
 
 ex3,ex7,and ax7 has higher p-value than ex5 and ax5 respectively, so our final model will exclude them
