@@ -29,22 +29,7 @@ We did further analysis on personality traits to determine if traits above a cer
 
 \newpage
 
-## 1.1 Citations
-Babushkin, E. 2017. Employee turnover: how to predict individual risks of quitting. Retrieved from: https://edwvb.blogspot.com/2017/10/employee-turnover-how-to-predict-individual-risks-of-quitting.html  
-  
-Broström, Göran. *Event History Analysis with R*. Chapman &amp; Hall/CRC, 2021.  
-  
-Hamers, L.J.C.H. 2021. Can we predict employee turnover given individual differences and retain talent by coaching? A data-driven approach. Retrieved from: http://arno.uvt.nl/show.cgi?fid=157305  
-  
-Kleinbaum, David G., and Mitchel Klein. *Survival Analysis, a Self-Learning Text*. New York: Springer, 2012.  
-  
-Pham H. 2018. How to interpret hazard ratios of Cox output? Answer. Retrieved from: https://stats.stackexchange.com/questions/379469/how-to-interpret-hazard-ratios-of-cox-output  
-  
-Wijaya, D. 2020. Employee Turnover, Employee Turnover dataset originally used for a Survival Analysis Model. Retrieved from: https://www.kaggle.com/datasets/davinwijaya/employee-turnover  
-
-\newpage
-
-## 1.2 Turnover Data
+## 1.1 Turnover Data
 Reading in `turnover.csv`
 ```{r}
 turnover <- read_csv("turnover.csv")
@@ -131,12 +116,10 @@ plot(survfit(stagSurv ~ way, turnover), fun = "cloglog", xlab="Time in Months",
 CZPH.fit <- cox.zph(CPH.Groupfit)
 CZPH.fit
 ```
-All the graphs gave mostly parallel lines and cox zph test gives a global p-value of greater than 0.05.  
-
+All the graphs gave mostly parallel lines.  
+  
 \newpage
-
-## 3.2 Goodness-of-Fit Approach
-With this approach we utilize a test statistic and p-value in order to more objectively assess the validity of the PH assumption for any given predictor. This is a more concrete and accurate method to test this assumption in comparison to the graphical approach which is based on the tester's subjective notion determining "how parallel is parallel?"(Kleinbaum and Klein, 172). For this study, we will supplement our graphical testing approach of the PH assumption using the `cox.zph()` function to give us the Scaled Residual p-values of the Global and Individual Shoenfeld Tests, which we will also represent with a plot using the `ggcoxzph()` function.
+With this next approach, we utilize a test statistic and p-value in order to more objectively assess the validity of the PH assumption for any given predictor. This is a more concrete and accurate method to test this assumption in comparison to the graphical approach which is based on the tester's subjective notion determining "how parallel is parallel?"(Kleinbaum and Klein, 172). For this study, we will supplement our graphical testing approach of the PH assumption using the `cox.zph()` function to give us the Scaled Residual p-values of the Global and Individual Shoenfeld Tests, which we will also represent with a plot using the `ggcoxzph()` function.
 
 ```{r}
 # Cox PH Model: Industry
@@ -223,13 +206,80 @@ Using this process, we determined that scoring greater than 5 on the extraversio
 We can determine the extent of their impact on the chances of quitting by creating hazard ratios out of the old and new personality scores (see below).  
   
 ```{r}
+turnover <- turnover %>% mutate(ex3 = ifelse(extraversion <= 3, 0, extraversion-3),
+                                id3 = ifelse(independ <= 3, 0, independ-3),
+                                sc3 = ifelse(selfcontrol <= 3, 0, selfcontrol-3),
+                                ax3 = ifelse(anxiety <= 3, 0, anxiety-3),
+                                nv3 = ifelse(novator <= 3, 0, novator-3),
+                                ex5 = ifelse(extraversion <= 5, 0, extraversion-5),
+                                id5 = ifelse(independ <= 5, 0, independ-5),
+                                sc5 = ifelse(selfcontrol <= 5, 0, selfcontrol-5),
+                                ax5 = ifelse(anxiety <= 5, 0, anxiety-5),
+                                nv5 = ifelse(novator <= 5, 0, novator-5),
+                                ex7 = ifelse(extraversion <= 7, 0, extraversion-7),
+                                id7 = ifelse(independ <= 7, 0, independ-7),
+                                sc7 = ifelse(selfcontrol <= 7, 0, selfcontrol-7),
+                                ax7 = ifelse(anxiety <= 7, 0, anxiety-7),
+                                nv7 = ifelse(novator <= 7, 0, novator-7))
+coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety+
+      ex5+id5+nv5, data = turnover)
+stepAIC(coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety+
+      ex5+id5+nv5, data = turnover))
+CPH.cutoff5 <- coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+
+    way+selfcontrol+anxiety+ex5, data = turnover)
+cox.zph(CPH.cutoff5)
+```
+We will also try the same for cutoff at 3 and 7,  
+
+```{r}
+turnover <- turnover %>% mutate()
+CPH.max <-coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
+                  extraversion+independ+selfcontrol+anxiety+novator+
+                  ex3+id3+sc3+ax3+nv3+
+                  ex5+id5+sc5+ax5+nv5+
+                  ex7+id7+sc7+ax7+nv7, data = turnover)
+CPH.cutoff.fit <- stepAIC(CPH.max)
+stepAIC(coxph(formula = stagSurv ~ selfcontrol*anxiety, data = turnover))
+stepAIC(coxph(formula = stagSurv ~ selfcontrol*anxiety + selfcontrol + anxiety, data = turnover))
+
+CPH.3 <- coxph(formula = stagSurv ~ gender+age+industry+traffic+coach+head_gender+greywage+way+
+                  ex3+id3+sc3+ax3+nv3, data = turnover)
+CPH.5 <- coxph(formula = stagSurv ~ gender+age+industry+traffic+coach+head_gender+greywage+way+
+                  ex5+id5+sc5+ax5+nv5, data = turnover)
+CPH.7 <- coxph(formula = stagSurv ~ gender+age+industry+traffic+coach+head_gender+greywage+way+
+                  ex7+id7+sc7+ax7+nv7, data = turnover)
+CPH.cutoff3 <- stepAIC(CPH.3)
+CPH.cutoff5 <- stepAIC(CPH.5)
+CPH.cutoff7 <- stepAIC(CPH.7)
+cox.zph(CPH.cutoff.fit)
+summary(coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+ex5+ax5+sc7,data = turnover))$conf.int[16:18,]
+
+```
+ex3,ex7,and ax7 has higher p-value than ex5 and ax5 respectively, so our final model will exclude them  
+
+```{r}
+coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
+        ex3+ex5+ax5+ex7+sc7+ax7,data = turnover)
+coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
+        ex5+ax5+sc7,data = turnover)
 ```
 
+\newpage
 
-
-
-
-
+## 6.0 Citations
+Babushkin, E. 2017. Employee turnover: how to predict individual risks of quitting. Retrieved from: https://edwvb.blogspot.com/2017/10/employee-turnover-how-to-predict-individual-risks-of-quitting.html  
+  
+Broström, Göran. *Event History Analysis with R*. Chapman &amp; Hall/CRC, 2021.  
+  
+Hamers, L.J.C.H. 2021. Can we predict employee turnover given individual differences and retain talent by coaching? A data-driven approach. Retrieved from: http://arno.uvt.nl/show.cgi?fid=157305  
+  
+Kleinbaum, David G., and Mitchel Klein. *Survival Analysis, a Self-Learning Text*. New York: Springer, 2012.  
+  
+Pham H. 2018. How to interpret hazard ratios of Cox output? Answer. Retrieved from: https://stats.stackexchange.com/questions/379469/how-to-interpret-hazard-ratios-of-cox-output  
+  
+Wijaya, D. 2020. Employee Turnover, Employee Turnover dataset originally used for a Survival Analysis Model. Retrieved from: https://www.kaggle.com/datasets/davinwijaya/employee-turnover  
 
 
 
