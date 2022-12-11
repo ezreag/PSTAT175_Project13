@@ -1,0 +1,324 @@
+---
+title: "Group 13 PSTAT 175 Final Project"
+author: "Grace Nunnelley, Ezra Aguimatang, Tetsuto Katsura"
+date: '2022-11-30'
+output: pdf_document
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, collapse = TRUE, warning = FALSE)
+```
+```{r include=FALSE}
+required_packages <- c("readr", "tinytex", "survival", "survminer", "ggplot2", "tidyr", "MASS", "gridExtra")
+lapply(required_packages, require, character.only=TRUE)
+```
+
+# 1.0 Introduction
+We chose to analyze the [Employee Turnover dataset](https://www.kaggle.com/datasets/davinwijaya/employee-turnover). This Employer Turnover dataset contains 1129 observations with 17 covariates about how long it took until the employer quit the job. We are using the column `stag` as our time variable, which represents failure and censor time in units months. In the `event` column, 1 equates to an employee quitting while 0 equates to a censor.  
+  
+The covariates in our model include the categorical variables: `gender`, `industry`, `profession`, `traffic`, `coach`, `head_gender`, `greywage`, and `way`.  `traffic` relates to the pipeline an employee came from, `coach` relates to, `head_gender` to the gender of the supervisor, `greywage` to money paid by the company, and `way` to the method of transportation (D. Wijaya, 2020). Our model also includes quantitative variables `age` (at the time of data entry, integers ranging from 18 to 58) as well as personality variables: `extraversion`, `independ`, `selfcontrol`, `anxiety`, and `novator`, all of which are float values ranging from 0 to 10. The personality variables are derived from the big personality model, so `selfcontrol` equates to conscientiousness, `anxiety` to neuroticism, `independ` to agreeableness, and `novator` to openness to experience (L.J.C.H. Hamers, 2021).  
+  
+With our project, we aim to predict the probability of an employee turning over or leaving versus not leaving based on the events and variables in the dataset.  The main motivating factor behind the creation of the dataset is to, “to predict individual risks of quitting of specific applicants.” (E. Babushkin, 2017). A HR analyst named Babuskin created this particular dataset and used it to predict the chances of a particular employee’s quitting (L.J.C.H. Hamers, 2021).  In our case, instead of predicting the individual risk of quitting, we aim to analyze the influence of particular covariate variables on the risk of quitting.  
+  
+After determining the most relevant variables for our general model, we use procedures to determine the influence of individual covariates on the survival rate. Our chosen covariates are `age`, `industry`, `profession`, `traffic`, `greywage`, `way`, `selfcontrol`, and `anxiety`. We examine each of these covariates to answer this question of how they individually affect the chances of quitting.  
+  
+For our categorical covariate, we focused on stratification, creating loglog plots, and running a `coxzph`/Schoenfeld test to validate the PH Assumption. We grouped together factors of some of the categorical covariates because they contained too many level factors.  
+  
+We did further analysis on personality traits to determine if traits above a certain score have a significant effect on our model.  
+
+\newpage
+
+## 1.1 Turnover Data
+Reading in `turnover.csv`
+```{r}
+turnover <- read_csv("turnover.csv")
+turnover <- turnover %>% mutate(stagSurv = Surv(stag, event),
+                                gender = as.factor(ifelse(gender == "m","Male","Female")),
+                                coach = as.factor(coach),
+                                greywage = as.factor(greywage),
+                                head_gender = as.factor(ifelse(head_gender == "m","Male","Female")),
+                                industry = as.factor(industry),
+                                profession = as.factor(profession),
+                                traffic = as.factor(traffic))
+
+roygbiv <- c("red","orange","green","cyan","blue","slateblue2","violet","black")
+fourcolor <- function(total, front){
+  return(c(rep("white", front), "black", "red", "blue", "green", rep("white", total-front-4)))}
+```
+
+\newpage
+
+# 2.0 Model Fitting (Forward AIC and BIC Models)
+Since there are no more than one event occurring per observation, we are going to look at the normal Cox Proportional Hazards model.  
+```{r}
+CPH.all <- coxph(stagSurv~gender+age+industry+traffic+coach+head_gender+greywage+way+
+                   extraversion+independ+selfcontrol+anxiety+novator,turnover)
+CPH.all
+```
+Looking at the p-values from the Cox summary output, we remove the least relevant covariates according to their large p-values. These irrelevant covariates include `gender`, `coach`, `head_gender`, `extraversion`, `independ`, and `novator`.  
+  
+In our output of running our cox model through the forward stepwise AIC function, we can determine that `age`, `industry`, `profession`, `traffic`, `greywage`, `way`, `selfcontrol`, and `anxiety` create significant differences in the survival rates.  
+  
+Therefore, we determine that the model of best fit is:  
+  
+```{r}
+CPH.AICfit <- coxph(formula = stagSurv ~ age+industry+profession+traffic+
+    greywage+way+selfcontrol+anxiety, data = turnover)
+```
+In addition to finding our model of best fit, we used another coxmodel and forward stepwise AIC function to ensure that interaction within our model is not relevant. Specifically, we created a cox model, shown below, to test interaction between our most relevant continuous variables, `selfcontrol` and `anxiety`.  
+  
+```{r}
+stepAIC(coxph(formula = stagSurv ~ selfcontrol*anxiety, data = turnover))
+```
+The resulting p-value, which is greater than 0.05,  shown in the output of the stepAIC function indicates that interaction is not statistically significant. Thus the interaction between selfcontrol and anxiety is not significant enough to include in our model.  
+
+\newpage
+
+# 3.0 Check Proportional Hazards Assumptions
+We looked through log-log plots for qualitative covariates that have few levels, and run through `coxzph` test for our non-continuous covariates.  
+  
+For `industry` and `profession`, we will reference the `coxph` function to group together levels into 3 groups. The groups are chosen according to their absolute z value as follows: less than 1.282, 1.282 to 2.576, and beyond 2.576. The z scores were chosen based on 80 and 99 intervals.  
+  
+The groups are organized as such. Industry Group 1: `Agriculture`, `Banks`, `Building`, and `Consult` together. Industry Group 2: `Miscellaneous`, `HoReCa`, `Manufacturing`, `Mining`, `Pharmaceuticals`, `State`, `Transportation`. Industry Group 3: `leftovers`. Profession Group 1: `Business Development`, `Consulting`, `Miscellaneous`, `Finance`, `HR`, `IT`, `Law`, `Sales`, `Teaching/Education`. Profession Group 2: `Commercial`, `Engineering`, `Marketing`, `PR`. Profession Group 3: `leftovers`.  
+  
+```{r}
+indG1 <- c("Agriculture","Banks","Building","Consult")
+indG2 <- c("etc","HoReCa","manufacture","Mining","Pharma","PowerGeneration","State","transport")
+profG1 <- c("BusinessDevelopment","Consult","etc","Finan\xf1e","HR","IT","Law","Sales","Teaching")
+profG2 <- c("Commercial","Engineer","Marketing","PR")
+turnover <- turnover %>% mutate(ind=ifelse(industry %in% indG1,"G1",
+                                           ifelse(industry %in% indG2,"G2","G3")),
+                                prof=ifelse(profession %in% profG1,"G1",
+                                           ifelse(profession %in% profG2,"G2","G3")))
+CPH.Groupfit <- coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety, data = turnover)
+```
+We looked through log-log plots for quantitative covariates, and run a `coxzph` test for non-continuous covariates.
+
+\newpage
+
+## 3.1 Log(-Log) Plots
+```{r}
+par(mfrow=c(1,2))
+colorlines <- c("blue", "pink", "red", "hotpink", "maroon", "orange", "yellow", 
+                "green", "turquoise", "darkgreen", "violet", "lavender", "black", 
+                "brown", "magenta", "gold")
+# Gender Log(-Log) Plot
+gender.KM <- survfit(stagSurv ~ as.factor(gender), data = turnover)
+plot(gender.KM, fun = "cloglog", col = colorlines, xlab = "Months",
+     ylab = "Log(-Log) survival", main = "Gender Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("Male", "Female"), fill=c("blue", "pink"))
+# Industry Log(-Log) Plot
+industry.KM <- survfit(stagSurv ~ ind, data = turnover)
+plot(industry.KM, fun = "cloglog", col = colorlines, xlab = "Months",
+     ylab = "Log(-Log) survival", main = "Industry Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("G1", "G2", "G3"), fill=c("blue","pink","red"))
+```
+
+\newpage
+
+```{r}
+par(mfrow=c(1,2))
+# Profession Log(-Log) Plot
+profession.KM <- survfit(stagSurv ~ prof, data = turnover)
+plot(profession.KM, fun = "cloglog", col = colorlines, xlab = "Months",
+     ylab = "Log(-Log) survival", main = "Profession Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("G1", "G2", "G3"), fill=c("blue","pink","red"))
+# Traffic Log(-Log) Plot
+traffic.KM <- survfit(stagSurv ~ as.factor(traffic), data = turnover)
+plot(traffic.KM, fun = "cloglog", col = colorlines, xlab = "Months",
+     ylab = "Log(-Log) survival", main = "Traffic Log(-Log) curves")
+```
+
+\newpage
+
+```{r}
+par(mfrow=c(1,2))
+# Greywage Log(-Log) Plot
+greywage.KM <- survfit(stagSurv ~ as.factor(greywage), data = turnover)
+plot(greywage.KM, fun = "cloglog", col = colorlines, xlab = "Months",
+     ylab = "Log(-Log) survival", main = "Greywage Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("grey", "white"), fill=c("blue", "pink"))
+# Way Log(-Log) Plot
+way.KM <- survfit(stagSurv ~ as.factor(way), data = turnover)
+plot(way.KM, fun = "cloglog", col = colorlines, xlab = "Months",
+     ylab = "Log(-Log) survival", main = "Way Log(-Log) curves")
+legend(x="topleft", title="Legend", legend=c("bus", "car", "foot"), fill=c("blue", "pink", "red"))
+```
+\newpage
+
+```{r, include=FALSE}
+### log-log plots of continuous covariates `selfcontrol` and `anxiety`
+par(mfrow=c(1,2))
+# Profession Log(-Log) Plot
+profession.KM <- survfit(stagSurv ~ as.factor(anxiety), data = turnover)
+plot(profession.KM, fun = "cloglog", col = colorlines, xlab = "Months",
+     ylab = "Log(-Log) survival", main = "Anxiety Log(-Log) curves")
+# legend(x="topleft", title="Legend", legend=c("G1", "G2", "G3"), fill=c("blue","pink","red"))
+# Traffic Log(-Log) Plot
+traffic.KM <- survfit(stagSurv ~ as.factor(selfcontrol), data = turnover)
+plot(traffic.KM, fun = "cloglog", col = colorlines, xlab = "Months",
+     ylab = "Log(-Log) survival", main = "SelfControl Log(-Log) curves")
+```
+
+\newpage
+
+With this next approach, we utilize a test statistic and p-value in order to more objectively assess the validity of the PH assumption for any given predictor. This is a more concrete and accurate method to test this assumption in comparison to the graphical approach which is based on the tester's subjective notion determining "how parallel is parallel?"(Kleinbaum and Klein, 172). For this study, we will supplement our graphical testing approach of the PH assumption using the `cox.zph()` function to give us the Scaled Residual p-values of the Global and Individual Shoenfeld Tests, which we will also represent with a plot using the `ggcoxzph()` function.
+
+
+```{r}
+cox.zph(CPH.Groupfit)
+cox.zph(CPH.all)
+```
+
+The graphs are mostly parallel
+
+```{r, include=FALSE}
+# Cox PH Model: Industry
+coxph.industry <- coxph(stagSurv~industry, data=turnover)
+anova(coxph.industry)
+# Cox PH Model: Profession
+coxph.profession <- coxph(stagSurv~profession, data=turnover)
+anova(coxph.profession)
+# Cox PH Model: Traffic
+coxph.traffic <- coxph(stagSurv~traffic, data=turnover)
+anova(coxph.traffic)
+# Cox PH Model: Grey Wage
+coxph.greywage <- coxph(stagSurv~greywage, data=turnover)
+anova(coxph.greywage)
+# Cox PH Model: Way
+coxph.way <- coxph(stagSurv~way, data=turnover)
+anova(coxph.way)
+
+testzph.industry <- cox.zph(coxph.industry)
+testzph.profession <- cox.zph(coxph.profession)
+testzph.traffic <- cox.zph(coxph.traffic)
+testzph.greywage <- cox.zph(coxph.greywage)
+testzph.way <- cox.zph(coxph.way)
+
+ggcoxzph.industry <- ggcoxzph(testzph.industry)
+ggcoxzph.profession <- ggcoxzph(testzph.profession)
+ggcoxzph.traffic <- ggcoxzph(testzph.traffic)
+ggcoxzph.greywage <- ggcoxzph(testzph.greywage)
+ggcoxzph.way <- ggcoxzph(testzph.way)
+```
+\newpage
+
+As can be seen above from our plots of the Scaled Schoenfeld Residuals and resulting p-values of `industry`, `profession`, `traffic`, `greywage`, and `way`, we were able to both corroborate and refute the results of the previous graphical log-log plot approach to testing the Proportional Hazards assumption. With significantly large p-values, we can conclude that `industry` ($p=0.3574$), `greywage` ($p=0.208)$, and `way` ($p=0.6887$) all pass the PH assumption individually. However, `profession` ($p=0$) and `traffic` ($p=0.0466$) do not present statistically significant p-values and therefore violate the Proportional Hazard assumption.  
+
+\newpage
+
+# 4.0 Conclusions
+```{r, include=FALSE}
+summary(coxph(formula = stagSurv ~ age + ind + prof + traffic + greywage + way + 
+        selfcontrol + anxiety, data = turnover))
+```
+
+```{r, include=FALSE}
+CPH.Groupfit <- coxph(formula = stagSurv ~ gender+age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety, data = turnover)
+```
+Looking at the summary output of the cox output on our ideal model, age, group 2 industries, group 3 industries, group 2 professions, and white grey wage have the greatest statistical significance compared to other covariates according to their p-values.  
+
+```{r}
+# report confidence intervals as hazard rates??? 
+# confidence interval
+summary(CPH.Groupfit)$conf.int[,-c(2)]
+```
+  
+Looking at the table, we can see that the hazard ratios (taken from `exp(coef)`) are `trafficempjs`: 2.0873516, `age`: 1.0217839, `profG2`: 1.8002475, `indG2`: 0.6521543, `indG3`: 0.4586270, `greywagewhite`: 0.5953945  
+  
+Hazard represents the risk of quitting. `trafficempjs` increases the hazard rate by 108%. `profG2` increases 80%. `age` increases 2%. `indG3` (1-0.46=0.54) decreases hazard rate by 54%. `grewwagewhite` decreases 40% (Pham H, 2018).  
+  
+Using these findings, we can conclude that the traffic factor, `empjs` significantly increases the chances of quitting as well as belonging to profession group 2 (Commercial, Engineering, Marketing, PR).  
+
+```{r, include=FALSE}
+# Plotting particular hazard rates with respect to the baseline Hazard. 
+# non-essential, no need to include
+
+# new references
+# https://stats.stackexchange.com/questions/25317/how-to-calculate-predicted-hazard-rates-from-a-cox-ph-model
+# https://stats.stackexchange.com/questions/83892/understanding-coxph-output-in-r
+
+# summary(survfit(CPH.Groupfit))
+baseline <- basehaz(CPH.Groupfit)
+plot(baseline$time, baseline$hazard, type='l',main="Hazard rates", xlab="Months", ylab="hazard rate") 
+# numbers based on exp(-coef) for age
+lines(baseline$time, 0.5554792*baseline$hazard, col="coral") # profG2
+lines(baseline$time, 0.4791*baseline$hazard, col="blue") # trafficempjs
+lines(baseline$time, 1.6795587*baseline$hazard, col="grey") # greywagewhite
+lines(baseline$time, 2.1804211*baseline$hazard, col="darkgreen") # indG3
+legend(x="topleft", title="Legend", legend=c("baseline", "profG2", "trafficempjs", "greywagewhite","indG3"), fill=c("black","coral","blue","grey","darkgreen"))
+```
+
+
+\newpage
+
+# 5.0 Advanced Methods
+Now we are going to make adjustments to personality scores to determine if any of the personality scores affect the time. We chose to examine personality scores  by altering their range, adding it to our model of best fit, and using Step AIC, coxph, and coxzph processes on our new model to see personality scores within a specific range make a difference.  
+  
+We changed the range of personality variables by setting values that were less than or equal to a ‘threshold’ number to zero, and subtracting that threshold number from the values that are greater than that threshold number. We used numbers 3, 5, and 7 as threshold values to alter the range of our personality scores.  
+  
+Using this process, we determined that scoring greater than 5 on the extraversion scale and anxiety scale, as well as scoring greater than 7 on the self control scale, has a significant effect. Thus, we can argue that being more extraverted, anxious, and self-controlled is relevant to our model.  
+  
+We can determine the extent of their impact on the chances of quitting by creating hazard ratios out of the old and new personality scores (see below).  
+  
+```{r}
+turnover <- turnover %>% mutate(ex3 = ifelse(extraversion <= 3, 0, extraversion-3),
+                                id3 = ifelse(independ <= 3, 0, independ-3),
+                                sc3 = ifelse(selfcontrol <= 3, 0, selfcontrol-3),
+                                ax3 = ifelse(anxiety <= 3, 0, anxiety-3),
+                                nv3 = ifelse(novator <= 3, 0, novator-3),
+                                ex5 = ifelse(extraversion <= 5, 0, extraversion-5),
+                                id5 = ifelse(independ <= 5, 0, independ-5),
+                                sc5 = ifelse(selfcontrol <= 5, 0, selfcontrol-5),
+                                ax5 = ifelse(anxiety <= 5, 0, anxiety-5),
+                                nv5 = ifelse(novator <= 5, 0, novator-5),
+                                ex7 = ifelse(extraversion <= 7, 0, extraversion-7),
+                                id7 = ifelse(independ <= 7, 0, independ-7),
+                                sc7 = ifelse(selfcontrol <= 7, 0, selfcontrol-7),
+                                ax7 = ifelse(anxiety <= 7, 0, anxiety-7),
+                                nv7 = ifelse(novator <= 7, 0, novator-7))
+stepAIC(coxph(formula = stagSurv ~ age+ind+prof+traffic+
+    greywage+way+selfcontrol+anxiety+
+      ex5+id5+nv5, data = turnover))
+CPH.cutoff5 <- coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+
+    way+selfcontrol+anxiety+ex5, data = turnover)
+cox.zph(CPH.cutoff5)
+```
+We will also try the same for cutoff at 3 and 7,  
+
+```{r, echo=T, results = 'hide'}
+CPH.max <-coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+
+                  extraversion+independ+selfcontrol+anxiety+novator+
+                  ex3+id3+sc3+ax3+nv3+
+                  ex5+id5+sc5+ax5+nv5+
+                  ex7+id7+sc7+ax7+nv7, data = turnover)
+CPH.cutoff.fit <- stepAIC(CPH.max)
+```
+```{r}
+CPH.cutoff.fit
+```
+ex3,ex7,and ax7 has higher p-value than ex5 and ax5 respectively, so our final model will exclude them.
+
+```{r}
+summary(coxph(formula = stagSurv ~ age+ind+prof+traffic+greywage+way+ex5+ax5+sc7,data = turnover))$conf.int[16:18,]
+```
+
+\newpage
+
+## 6.0 Citations
+Babushkin, E. 2017. Employee turnover: how to predict individual risks of quitting. Retrieved from: https://edwvb.blogspot.com/2017/10/employee-turnover-how-to-predict-individual-risks-of-quitting.html  
+  
+Broström, Göran. *Event History Analysis with R*. Chapman &amp; Hall/CRC, 2021.  
+  
+Hamers, L.J.C.H. 2021. Can we predict employee turnover given individual differences and retain talent by coaching? A data-driven approach. Retrieved from: http://arno.uvt.nl/show.cgi?fid=157305  
+  
+Kleinbaum, David G., and Mitchel Klein. *Survival Analysis, a Self-Learning Text*. New York: Springer, 2012.  
+  
+Pham H. 2018. How to interpret hazard ratios of Cox output? Answer. Retrieved from: https://stats.stackexchange.com/questions/379469/how-to-interpret-hazard-ratios-of-cox-output  
+  
+Wijaya, D. 2020. Employee Turnover, Employee Turnover dataset originally used for a Survival Analysis Model. Retrieved from: https://www.kaggle.com/datasets/davinwijaya/employee-turnover  
+
+
